@@ -2,8 +2,8 @@
 import os
 import csv
 import pprint
-stat_columns = ["teamname","CorsiFor60","CorsiAgn60""FenwickFor60",
-           "FenwickAgn60","PDO",]
+
+"Mapping for stats file to standings file and hated ranking"
 team_map = {"BOS": ("Boston Bruins", 2),
 "ANA": ("Anaheim Ducks", 5),
 "COL": ("Colorado Avalanche", 3),
@@ -36,13 +36,14 @@ team_map = {"BOS": ("Boston Bruins", 2),
 "BUF": ("Buffalo Sabres", 1),
             }
 
+"Get the dir with the two files we need"
 home_dir =os.path.expanduser('~')
 standings = os.path.join(home_dir, 'standings.csv')
-print standings
 stats = os.path.join(home_dir, 'stats.csv')
 
 team_dict = {}
 
+"Parse standings"
 with open(standings, 'rb') as standingsf:
     standings_r = csv.DictReader(standingsf, delimiter=',')
     for row in standings_r:
@@ -53,23 +54,23 @@ with open(standings, 'rb') as standingsf:
 
 print team_dict
 
+"Parse Stats"
 with open(stats, 'rb') as statsf:
     stats_r = csv.DictReader(statsf)
 
     for row in stats_r:
         team = row.pop('teamname')
         team_mapping = team_map[team][0]
-        print team_mapping
         for k,v in row.iteritems():
             team_dict[team_mapping][k] = v
         team_dict[team_mapping]['hate'] = float(team_map[team][1])
 
 
-"pprint.pprint(team_dict)"
 rank = []
+"Grock the data"
 for k,v in team_dict.iteritems():
+    "raw stats"
     team_score = float(0)
-    winloss = (float(v['W']) + float(v['OL'])/3)/ float(v['GP'])
     sos = float(v['SOS']) * float(v['GP'])
     corsi_rating = float(v['Corsi%'])
     fenwick_rating = float(v['Fenwick%'])
@@ -77,6 +78,8 @@ for k,v in team_dict.iteritems():
     gd = float(v['GF']) - float(v['GA'])
     special_teams = float(v['PP%']) + float(v['PK%'])
 
+    "Weighted stats"
+    winloss = (float(v['W']) + float(v['OL'])/3)/ float(v['GP'])
     w_hate = (v['hate'] - 5)/125
     w_sos = sos/50
     w_winloss = (winloss - .5) * (1 + w_sos)
@@ -86,8 +89,12 @@ for k,v in team_dict.iteritems():
     w_pdo = (pdo-100)/300
     w_gd = (gd/700)
     w_special_teams = (special_teams-100)/500
+    
+    "Total Score"
     team_score = (w_winloss + w_cf + w_hate +
                   w_pdo + w_gd + w_special_teams)
+                 
+    "Logging"
     print ''
     print k, corsi_rating, fenwick_rating
     print 'winloss'
@@ -112,5 +119,3 @@ for k,v in team_dict.iteritems():
 
 pprint.pprint([x for x in sorted(rank, key=lambda tup: tup[1])])
 
-
-"print sort_team_dict"
