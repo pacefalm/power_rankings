@@ -3,7 +3,6 @@ import os
 import csv
 import pprint
 import operator
-import copy
 
 class ranker(object):
 
@@ -54,54 +53,31 @@ class ranker(object):
         last_2_week_weight = float(1)
         historic_stats = 'week_%s_stats.csv' % self.week
         historic_standings = 'week_%s_standings.csv' % (self.week - 2)
-        historic_weight = float(1)
+        historic_weight = float(.5)
 
         self.total_weight = last_2_week_weight + historic_weight
 
+        print last_2_week_standings
+        print historic_standings
         last_2_standings_dict, overall_dict = self.parse_standings(
             last_2_week_standings, historic_standings)
 
         last_2_stats_dict = self.parse_stats(
-            last_2_week_stats, last_2_standings_dict.copy())
-        overall_stats_dict = self.parse_stats(historic_stats, overall_dict.copy())
-
+            last_2_week_stats, last_2_standings_dict)
+        overall_stats_dict = self.parse_stats(historic_stats, overall_dict)
 
         #If this is our first run, initialize a rank dict
-        rank_dict = dict((k,float(0)) for k in last_2_stats_dict.keys())
-        self.diff = dict((k,float(0)) for k in last_2_stats_dict.keys())
+        self.rank = dict((k,float(0)) for k in last_2_stats_dict.keys())
 
-        last_2_ranks = self.rank_em(
-            last_2_stats_dict, last_2_week_weight, rank_dict)
+        self.rank_em(last_2_stats_dict, last_2_week_weight)
+        self.rank_em(overall_stats_dict, historic_weight)
+
         
         #Spit out ranks
-        sorted_ranks = sorted(
-            last_2_ranks.items(), key=operator.itemgetter(1), reverse=True)
-        print 'LAST TWO WEEKS'
+        sorted_ranks = sorted(self.rank.items(), key=operator.itemgetter(1), reverse=True)
         print 'Rank  Team                       Score'
         for idx, rank in enumerate(sorted_ranks):
             print '{0:>4}. {1:.<25}  {2:.2f}'.format(idx+1, rank[0], rank[1])
-            
-        overall_ranks = self.rank_em(
-            overall_stats_dict, historic_weight, rank_dict)
-        
-        #Spit out ranks
-        sorted_ranks = sorted(
-            overall_ranks.items(), key=operator.itemgetter(1), reverse=True)
-        print 'OVERALL'
-        print 'Rank  Team                       Score'
-        for idx, rank in enumerate(sorted_ranks):
-            print '{0:>4}. {1:.<25}  {2:.2f}'.format(idx+1, rank[0], rank[1])
-
-        final_ranks = {}
-        for k,v in last_2_ranks.iteritems():
-            final_ranks[k] = v + overall_ranks[k]
-        sorted_ranks = sorted(
-            final_ranks.items(), key=operator.itemgetter(1), reverse=True)
-        print 'FINAL'
-        print 'Rank  Team                       Score'
-        for idx, rank in enumerate(sorted_ranks):
-            print '{0:>4}. {1:.<25}  {2:.2f}'.format(idx+1, rank[0], rank[1])
-            
 
     def parse_standings(self, standings, old_standings):
         #Grab the files and start parsing
@@ -122,29 +98,26 @@ class ranker(object):
                         team_dict[team][k] = v
                 return team_dict
 
+        print standings
         #Parse old standings
         #Stopgap until war_on_ice adds standings
         old_team_dict = parse(old_standings)
+
         #Parse standings
         team_dict = parse(standings)
-
         
         #Create new dict for last 2 weeks
         last_two_dict = {}
-        team_dict_cpy = copy.deepcopy(team_dict)
-        
-        for team, standings in team_dict_cpy.iteritems():
+        print team_dict['Carolina Hurricanes']
+        print old_team_dict['Carolina Hurricanes']
+        for team, standings in team_dict.iteritems():
             old_standings = old_team_dict[team]
             last_two_dict[team] = standings
-            if team == 'Carolina Hurricanes':
-                print last_two_dict[team]['GP'], standings['GP'], team_dict[team]['GP']
-
             last_two_dict[team]['GP'] = int(standings['GP']) - int(old_standings['GP'])
-            if team == 'Carolina Hurricanes':
-                print last_two_dict[team]['GP'], standings['GP'], team_dict[team]['GP']
             last_two_dict[team]['L'] = int(standings['L']) - int(old_standings['L'])
             last_two_dict[team]['W'] = int(standings['W']) - int(old_standings['W'])
             last_two_dict[team]['OL'] = int(standings['OL']) - int(old_standings['OL'])
+
 
         return last_two_dict, team_dict
 
@@ -166,15 +139,14 @@ class ranker(object):
         return team_dict
 
 
-    def rank_em(self, team_dict, weight, rank_dict):
-        rank = rank_dict.copy()
-
-        print str(weight/self.total_weight)
+    def rank_em(self, team_dict, weight):
+        pprint.pprint(team_dict.keys())
         #get mins/maxes
         #NOTE: This allows us to get a range of acceptable sos's
         max_sos = 0
         max_gd = 0
         for k,v in team_dict.iteritems():
+            print k, v
             sos = float(v['SOS']) * float(v['GP'])
             gd = float(v['GF']) - float(v['GA'])
             if gd > max_gd or -gd > max_gd:
@@ -236,40 +208,34 @@ class ranker(object):
 
             #Total Score
             team_score = ((w_winloss_sos + w_cf + w_hate +
-                          w_sh + w_sv+ w_gd + w_special_teams) * 100)
+                          w_sh + w_sv+ w_gd + w_special_teams) *
+                          (weight/self.total_weight) * 100)
                      
             #Logging
-            with open(os.path.join(self.home_dir, 'ranker.log'), 'wb') as log_file:
-                log_file.write('')
-                log_file.write('winloss')
-                log_file.write(str(w_winloss))
-                log_file.write('sos')
-                log_file.write(str(w_sos))
-                log_file.write('corsi')
-                log_file.write(str(w_corsi))
-                log_file.write('fenwick')
-                log_file.write(str(w_fenwick))
-                log_file.write('w_cf')
-                log_file.write(str(w_cf))
-                log_file.write('n_sv')
-                log_file.write(str(n_sv))
-                log_file.write('n_sh')
-                log_file.write(str(n_sh))
-                log_file.write('gd')
-                log_file.write(str(w_gd))
-                log_file.write('spc')
-                log_file.write(str(w_special_teams))
-                log_file.write('hate')
-                log_file.write(str(w_hate))
-            #print 'old',self.rank[k]
-            old = rank[k]
-
-            rank[k] = rank[k] + team_score *(weight/self.total_weight)
-            #print 'new',self.rank[k]
-            new = rank[k]
-            self.diff[k] = new-old
-        return rank
-
+            with open(os.path.join(self.home_dir, 'ranker.log'), 'wb'):
+                print ''
+                print k, corsi, fenwick
+                print 'winloss'
+                print w_winloss
+                print 'sos'
+                print w_sos
+                print 'corsi'
+                print w_corsi
+                print 'fenwick'
+                print w_fenwick
+                print 'w_cf'
+                print w_cf
+                print 'n_sv'
+                print n_sv
+                print 'n_sh'
+                print n_sh
+                print 'gd'
+                print w_gd
+                print 'spc'
+                print w_special_teams
+                print 'hate'
+                print w_hate
+            self.rank[k] += team_score
 
 if __name__ == '__main__':
     ranker = ranker()
